@@ -2,9 +2,6 @@ import feedparser
 import os
 import requests
 import hashlib
-from openai import OpenAI
-
-client = OpenAI(api_key=os.environ["OPENAI_API_KEY"])
 
 # 监控品牌
 BRANDS = ["华为", "小米", "OPPO", "vivo", "荣耀", "一加", "魅族"]
@@ -23,6 +20,10 @@ MEDIA_RSS = [
 TELEGRAM_TOKEN = os.environ["TELEGRAM_BOT_TOKEN"]
 CHAT_ID = os.environ["TELEGRAM_CHAT_ID"]
 
+# DeepSeek API Key
+DEEPSEEK_API_KEY = os.environ["DEEPSEEK_API_KEY"]
+DEEPSEEK_URL = "https://api.deepseek.com/v1/chat/completions"
+
 # 防止重复
 processed_hashes = set()
 
@@ -33,22 +34,34 @@ def send_telegram(message):
 
 def summarize(content):
     prompt = f"""
-    你是手机行业情报分析助手。
-    请输出：
-    1. 50字摘要
-    2. 分类（新品/供应链/财报/海外/组织/AI）
-    3. 重要度 1-5（普通新闻1-2，重要发布3，战略级4-5）
-    
-    新闻标题：
-    {content}
+你是手机行业情报分析助手。
+请输出：
+1. 200字摘要，概括热点信息
+2. 分类（新品/供应链/财报/海外/组织/AI）
+3. 重要度 1-5（普通新闻1-2，重要发布3，战略级4-5）
+
+新闻标题：
+{content}
     """
 
-    response = client.chat.completions.create(
-        model="gpt-4o-mini",
-        messages=[{"role": "user", "content": prompt}],
-    )
+    headers = {
+        "Authorization": f"Bearer {DEEPSEEK_API_KEY}",
+        "Content-Type": "application/json"
+    }
 
-    return response.choices[0].message.content
+    data = {
+        "model": "deepseek-chat",
+        "messages": [{"role": "user", "content": prompt}],
+        "max_tokens": 150,
+        "temperature": 0.7
+    }
+
+    response = requests.post(DEEPSEEK_URL, headers=headers, json=data)
+    response.raise_for_status()
+    result = response.json()
+
+    # DeepSeek 返回结构和 OpenAI 有些差异，假设同样是 choices[0].message.content
+    return result["choices"][0]["message"]["content"]
 
 def process_news(brand, title):
     h = hashlib.md5(title.encode()).hexdigest()
