@@ -1,0 +1,90 @@
+import feedparser
+import os
+import requests
+import hashlib
+from openai import OpenAI
+
+client = OpenAI(api_key=os.environ["OPENAI_API_KEY"])
+
+# 监控品牌
+BRANDS = ["华为", "小米", "OPPO", "vivo", "荣耀", "一加", "魅族"]
+
+# 科技媒体 RSS
+MEDIA_RSS = [
+    "https://www.ithome.com/rss/",
+    "https://36kr.com/feed",
+    "https://www.huxiu.com/rss/0.xml",
+    "https://www.tmtpost.com/rss",
+    "https://www.ifanr.com/feed",
+    "https://www.leikeji.com/rss",
+    "https://www.mydrivers.com/rss.xml",
+]
+
+TELEGRAM_TOKEN = os.environ["TELEGRAM_BOT_TOKEN"]
+CHAT_ID = os.environ["TELEGRAM_CHAT_ID"]
+
+# 防止重复
+processed_hashes = set()
+
+def send_telegram(message):
+    url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
+    data = {"chat_id": CHAT_ID, "text": message}
+    requests.post(url, data=data)
+
+def summarize(content):
+    prompt = f"""
+    你是手机行业情报分析助手。
+    请输出：
+    1. 50字摘要
+    2. 分类（新品/供应链/财报/海外/组织/AI）
+    3. 重要度 1-5（普通新闻1-2，重要发布3，战略级4-5）
+    
+    新闻标题：
+    {content}
+    """
+
+    response = client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=[{"role": "user", "content": prompt}],
+    )
+
+    return response.choices[0].message.content
+
+def process_news(brand, title):
+    h = hashlib.md5(title.encode()).hexdigest()
+    if h in processed_hashes:
+        return
+
+    processed_hashes.add(h)
+
+    summary = summarize(title)
+
+    # 简单重要度过滤
+    if "重要度 1" in summary or "重要度 2" in summary:
+        return
+
+    message = f"【{brand}】\n{summary}"
+    send_telegram(message)
+
+def fetch_google_news():
+    for brand in BRANDS:
+        url = f"https://news.google.com/rss/search?q={brand}+手机&hl=zh-CN&gl=CN&ceid=CN:zh-Hans"
+        feed = feedparser.parse(url)
+        for entry in feed.entries[:3]:
+            process_news(brand, entry.title)
+
+def fetch_media_news():
+    for rss in MEDIA_RSS:
+        feed = feedparser.parse(rss)
+        for entry in feed.entries[:10]:
+            title = entry.title
+            for brand in BRANDS:
+                if brand in title:
+                    process_news(brand, title)
+
+def main():
+    fetch_google_news()
+    fetch_media_news()
+
+if __name__ == "__main__":
+    main()
