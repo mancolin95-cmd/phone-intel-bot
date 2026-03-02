@@ -4,7 +4,7 @@ import requests
 import hashlib
 
 # 监控品牌
-BRANDS = ["华为", "小米", "OPPO", "vivo", "荣耀", "一加", "魅族"]
+BRANDS = ["华为", "小米", "OPPO", "vivo", "荣耀", "一加", "魅族","Apple"]
 
 # 科技媒体 RSS
 MEDIA_RSS = [
@@ -39,6 +39,7 @@ def summarize(content):
 1. 200字摘要，概括热点信息
 2. 分类（新品/供应链/财报/海外/组织/AI）
 3. 重要度 1-5（普通新闻1-2，重要发布3，战略级4-5）
+4. 附上原始内容超链接
 
 新闻标题：
 {content}
